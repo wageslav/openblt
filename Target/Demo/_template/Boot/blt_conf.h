@@ -103,7 +103,7 @@
  * channel.
  */
 /** \brief Enable/disable CAN transport layer. */
-#define BOOT_COM_CAN_ENABLE             (1)
+#define BOOT_COM_CAN_ENABLE             (0)
 /** \brief Configure the desired CAN baudrate. */
 #define BOOT_COM_CAN_BAUDRATE           (500000)
 /** \brief Configure CAN message ID target->host. */
@@ -234,6 +234,20 @@
  */
 /** \brief Enable/disable the hook functions for controlling the watchdog. */
 #define BOOT_COP_HOOKS_ENABLE           (1)
+
+
+/****************************************************************************************
+*   E V E N T S   M O D U L E   C O N F I G U R A T I O N
+****************************************************************************************/
+/* The events module emits firmware update related events, making it possible for you
+ * to track the progress of a firmware update. Ideal for updating a user interface or
+ * for logging purposes. 
+ * To enable the events module, set BOOT_EVENTS_ENABLE to a value of 1. This causes the
+ * bootloader to call the EventsHook() hook-function whenever an firmware update related
+ * event occurs.
+ */
+/** \brief Enable/disable the events module. */
+#define BOOT_EVENTS_ENABLE              (0)
 
 
 /****************************************************************************************

@@ -539,40 +539,6 @@
 #error "BOOT_FILE_SYS_ENABLE must be 0 or 1"
 #endif
 
-#if (BOOT_FILE_SYS_ENABLE > 0)
-#ifndef BOOT_FILE_LOGGING_ENABLE
-#define BOOT_FILE_LOGGING_ENABLE         (0)
-#endif
-
-#if (BOOT_FILE_LOGGING_ENABLE < 0) || (BOOT_FILE_LOGGING_ENABLE > 1)
-#error "BOOT_FILE_LOGGING_ENABLE must be 0 or 1"
-#endif
-
-#ifndef BOOT_FILE_ERROR_HOOK_ENABLE
-#define BOOT_FILE_ERROR_HOOK_ENABLE      (0)
-#endif
-
-#if (BOOT_FILE_ERROR_HOOK_ENABLE < 0) || (BOOT_FILE_ERROR_HOOK_ENABLE > 1)
-#error "BOOT_FILE_ERROR_HOOK_ENABLE must be 0 or 1"
-#endif
-
-#ifndef BOOT_FILE_STARTED_HOOK_ENABLE
-#define BOOT_FILE_STARTED_HOOK_ENABLE    (0)
-#endif
-
-#if (BOOT_FILE_STARTED_HOOK_ENABLE < 0) || (BOOT_FILE_STARTED_HOOK_ENABLE > 1)
-#error "BOOT_FILE_STARTED_HOOK_ENABLE must be 0 or 1"
-#endif
-
-#ifndef BOOT_FILE_COMPLETED_HOOK_ENABLE
-#define BOOT_FILE_COMPLETED_HOOK_ENABLE  (0)
-#endif
-
-#if (BOOT_FILE_COMPLETED_HOOK_ENABLE < 0) || (BOOT_FILE_COMPLETED_HOOK_ENABLE > 1)
-#error "BOOT_FILE_COMPLETED_HOOK_ENABLE must be 0 or 1"
-#endif
-#endif /* BOOT_FILE_SYS_ENABLE > 0 */
-
 
 /****************************************************************************************
 *   B A C K D O O R   E N T R Y   C H E C K
@@ -635,6 +601,18 @@
 
 #if (BOOT_COP_HOOKS_ENABLE < 0) || (BOOT_COP_HOOKS_ENABLE > 1)
 #error "BOOT_COP_HOOKS_ENABLE must be 0 or 1"
+#endif
+
+
+/****************************************************************************************
+*   E V E N T S   M O D U L E   C O N F I G U R A T I O N   C H E C K
+****************************************************************************************/
+#ifndef BOOT_EVENTS_ENABLE
+#define BOOT_EVENTS_ENABLE              (0)
+#endif
+
+#if (BOOT_EVENTS_ENABLE < 0) || (BOOT_EVENTS_ENABLE > 1)
+#error "BOOT_EVENTS_ENABLE must be 0 or 1"
 #endif
 
 

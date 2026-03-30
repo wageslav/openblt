@@ -111,6 +111,7 @@ target_sources(openblt-core INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/boot.c"
     "${CMAKE_CURRENT_LIST_DIR}/com.c"
     "${CMAKE_CURRENT_LIST_DIR}/cop.c"
+    "${CMAKE_CURRENT_LIST_DIR}/events.c"
     "${CMAKE_CURRENT_LIST_DIR}/file.c"
     "${CMAKE_CURRENT_LIST_DIR}/infotable.c"
     "${CMAKE_CURRENT_LIST_DIR}/mb.c"

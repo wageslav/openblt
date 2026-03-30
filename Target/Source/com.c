@@ -49,6 +49,20 @@
 
 #if (BOOT_COM_ENABLE > 0)
 /****************************************************************************************
+* Macro definitions
+****************************************************************************************/
+#ifndef BOOT_COM_TIMEOUT_MS
+/** \brief Configure the communication timeout time in milliseconds. This is the time
+ *         between the sending of the last response packet and the reception of the next
+ *         request packet. If this time exceeds the time configured by this macro, a
+ *         timeout event is triggered. Note that this value can be overriden by another
+ *         value, if added to blt_conf.h.
+ */
+#define BOOT_COM_TIMEOUT_MS                 (5000U)
+#endif
+
+
+/****************************************************************************************
 * Hook functions
 ****************************************************************************************/
 #if (BOOT_COM_CUSTOM_ENABLE > 0)
@@ -74,10 +88,26 @@ extern void     ComCustomTransmitPacketHook(blt_int8u *data, blt_int8u len);
 
 
 /****************************************************************************************
+* Function prototypes
+****************************************************************************************/
+static void     ComTimeoutEnable(blt_bool enable);
+static blt_bool ComTimeoutDetected(void);
+static void     ComTimeoutReset(void);
+
+
+/****************************************************************************************
 * Local data declarations
 ****************************************************************************************/
 /** \brief Holds the communication interface of the currently active interface. */
 static tComInterfaceId comActiveInterface = COM_IF_OTHER;
+
+/** \brief Boolean flag to enable / disable the timeout monitoring. */
+static blt_bool comTimeoutMonitoringActive;
+
+/** \brief Holds a timestamp in milliseconds when the last response packet was
+ *         transmitted. Use by the communication timeout detection.
+ */
+static blt_int32u comLastResponseTransmitTime;
 
 
 /************************************************************************************//**
@@ -88,6 +118,8 @@ static tComInterfaceId comActiveInterface = COM_IF_OTHER;
 ****************************************************************************************/
 void ComInit(void)
 {
+  /* disable timeout monitoring by default. */
+  ComTimeoutEnable(BLT_FALSE);  
   /* initialize the XCP communication protocol */
   XcpInit();
 #if (BOOT_COM_CAN_ENABLE > 0)
@@ -142,12 +174,17 @@ void ComTask(void)
   blt_int8u xcpPacketLen;
   /* make xcpCtoReqPacket static for runtime efficiency */
   static blt_int8u xcpCtoReqPacket[BOOT_COM_RX_MAX_DATA];
+#if (BOOT_EVENTS_ENABLE > 0)
+  tEventsInfoError eventsInfoError;
+#endif
 
 #if (BOOT_COM_CAN_ENABLE > 0)
   if (CanReceivePacket(&xcpCtoReqPacket[0], &xcpPacketLen) == BLT_TRUE)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_CAN;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
@@ -157,6 +194,8 @@ void ComTask(void)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_RS232;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
@@ -166,6 +205,8 @@ void ComTask(void)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_MBRTU;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
@@ -175,6 +216,8 @@ void ComTask(void)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_USB;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
@@ -184,6 +227,8 @@ void ComTask(void)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_CUSTOM;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
@@ -193,10 +238,22 @@ void ComTask(void)
   {
     /* make this the active interface */
     comActiveInterface = COM_IF_NET;
+    /* enable timeout monitoring. */
+    ComTimeoutEnable(BLT_TRUE);  
     /* process packet */
     XcpPacketReceived(&xcpCtoReqPacket[0], xcpPacketLen);
   }
 #endif
+
+  /* check if a communication timeout event occurred. */
+  if (ComTimeoutDetected() == BLT_TRUE)
+  {
+#if (BOOT_EVENTS_ENABLE > 0)
+    /* trigger the OnError event.  */
+    eventsInfoError.error_id = EVENT_ERROR_ID_COM_TIMEOUT;
+    EventsProcess(EVENT_ID_ON_ERROR, &eventsInfoError);
+#endif
+  }
 } /*** end of ComTask ***/
 
 
@@ -207,6 +264,8 @@ void ComTask(void)
 ****************************************************************************************/
 void ComFree(void)
 {
+  /* disable timeout monitoring. */
+  ComTimeoutEnable(BLT_FALSE);  
 #if (BOOT_COM_USB_ENABLE > 0)
   /* disconnect the usb device from the usb host */
   UsbFree();
@@ -278,6 +337,8 @@ void ComTransmitPacket(blt_int8u *data, blt_int16u len)
 
   /* send signal that the packet was transmitted */
   XcpPacketTransmitted();
+  /* reset the communication timeout monitoring. */
+  ComTimeoutReset();
 } /*** end of ComTransmitPacket ***/
 
 
@@ -399,6 +460,72 @@ blt_bool ComIsConnected(void)
   /* give the result back to the caller. */
   return result;
 } /*** end of ComIsConnected ***/
+
+
+/************************************************************************************//**
+** \brief     Enables or disables the communication timeout monitoring.
+** \param     enable BLT_TRUE to enabe, BLT_FALSE to disable.
+** \return    none
+**
+****************************************************************************************/
+static void ComTimeoutEnable(blt_bool enable)
+{
+  /* update the flag and reset. */
+  comTimeoutMonitoringActive = enable;
+  ComTimeoutReset();
+} /*** end of ComTimeoutEnable ***/
+
+
+/************************************************************************************//**
+** \brief     Determines if a communication timeout was detected.
+** \return    BLT_TRUE if a communication timeout was detected, BLT_FALSE otherwise.
+**
+****************************************************************************************/
+static blt_bool ComTimeoutDetected(void)
+{
+  blt_bool   result = BLT_FALSE;
+  blt_int32u currentTime;
+  blt_int32u deltaTime;
+
+  /* only need to monitor for communication timeouts if something is connected and the
+   * timeout monitoring is enabled.
+   */
+  if ( (ComIsConnected() == BLT_TRUE) && (comTimeoutMonitoringActive == BLT_TRUE) )
+  {
+    /* determine the delta time between the last packet transmission and now. note that
+     * this also works in case of a timer overflow, due to integer math.
+     */
+    currentTime = TimerGet();
+    deltaTime = currentTime - comLastResponseTransmitTime;
+    /* did a communication timeout occur? */
+    if (deltaTime >= BOOT_COM_TIMEOUT_MS)
+    {
+      /* disable the timeout monitoring. otherwise the timeout event keeps triggering.
+       * note that the timeout monitoring is enabled again upon reception of a new
+       * response packet.
+      */
+      ComTimeoutEnable(BLT_FALSE);
+      /* timeout detected. Update the result. */
+      result = BLT_TRUE;
+    }
+  }
+
+  /* give the result back to the caller. */
+  return result;
+} /*** end of ComTimeoutDetected ***/
+
+
+/************************************************************************************//**
+** \brief     Resets the communication timeout time. Should be called each time a 
+**            response packet is transmitted.
+** \return    none
+**
+****************************************************************************************/
+static void ComTimeoutReset(void)
+{
+  /* update the timestamp when the last response packet was transmitted. */
+  comLastResponseTransmitTime = TimerGet();
+} /*** end of ComTimeoutReload ***/
 
 
 #if (BOOT_COM_DEFERRED_INIT_ENABLE == 1)

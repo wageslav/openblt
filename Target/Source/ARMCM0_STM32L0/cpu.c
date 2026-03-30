@@ -86,6 +86,12 @@ void CpuStartUserProgram(void)
      */
     ComDeferredInit();
 #endif
+#if (BOOT_EVENTS_ENABLE > 0)
+    /* trigger the OnSuppress event because the user program won't be started due to
+     * an invalid checksum.
+     */
+    EventsProcess(EVENT_ID_ON_SUPPRESS, BLT_NULL);
+#endif
     /* not a valid user program so it cannot be started */
     return;
   }
@@ -101,6 +107,12 @@ void CpuStartUserProgram(void)
      */
     ComDeferredInit();
   #endif
+  #if (BOOT_EVENTS_ENABLE > 0)
+    /* trigger the OnSuppress event because the user program starting is requested to
+     * be bypassed.
+     */
+    EventsProcess(EVENT_ID_ON_SUPPRESS, BLT_NULL);
+  #endif
     /* callback requests the user program to not be started */
     return;
   }
@@ -108,6 +120,13 @@ void CpuStartUserProgram(void)
 #if (BOOT_COM_ENABLE > 0)
   /* release the communication interface */
   ComFree();
+#endif
+#if (BOOT_EVENTS_ENABLE > 0)
+  /* trigger the OnExit event because the user program is about to be started, which
+   * exits the bootloader. should be done before TimerReset() just in case the 
+   * user might want to use the timer in the event hook.
+   */
+  EventsProcess(EVENT_ID_ON_EXIT, BLT_NULL);
 #endif
   /* reset the HAL */
   HAL_DeInit();
@@ -120,7 +139,7 @@ void CpuStartUserProgram(void)
    * user program's reset handler.
    */
   pProgResetHandler = (void(*)(void))(*((blt_addr *)CPU_USER_PROGRAM_STARTADDR_PTR));
-  /* The Cortex-M3 core has interrupts enabled out of reset. the bootloader
+  /* the Cortex-M0+ core has interrupts enabled out of reset. the bootloader
    * explicitly disables these for security reasons. Enable them here again, so it does 
    * not have to be done by the user program.
    */
