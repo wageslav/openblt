@@ -32,7 +32,11 @@
 #include "boot.h"                                /* bootloader generic header          */
 #if (BOOT_COM_MBRTU_ENABLE > 0)
 #include "stm32u5xx.h"                           /* STM32 CPU and HAL header           */
+#if (BOOT_COM_MBRTU_CHANNEL_INDEX < 5) /* USART or UART channel */
 #include "stm32u5xx_ll_usart.h"                  /* STM32 LL USART header              */
+#else /* LPUART channel */
+#include "stm32u5xx_ll_lpuart.h"                 /* STM32 LL LPUART header             */
+#endif
 
 
 /****************************************************************************************
@@ -40,7 +44,9 @@
 ****************************************************************************************/
 /** \brief Timeout for transmitting a byte in milliseconds. */
 #define MBRTU_BYTE_TX_TIMEOUT_MS          (10u)
-/* map the configured UART channel index to the STM32's USART peripheral */
+/* map the configured UART channel index to the STM32's USART peripheral. note that the
+ * LPUART peripheral is mapped after the regular U(S)ART peripherals.
+ */
 #if (BOOT_COM_MBRTU_CHANNEL_INDEX == 0)
 /** \brief Set UART base address to USART1. */
 #define USART_CHANNEL   USART1
@@ -56,6 +62,9 @@
 #elif (BOOT_COM_MBRTU_CHANNEL_INDEX == 4)
 /** \brief Set UART base address to UART5. */
 #define USART_CHANNEL   UART5
+#elif (BOOT_COM_MBRTU_CHANNEL_INDEX == 5)
+/** \brief Set UART base address to LPUART1. */
+#define USART_CHANNEL   LPUART1
 #endif
 
 
@@ -89,16 +98,21 @@ void MbRtuInit(void)
   blt_int16u currentTimeTicks;
   blt_int8u  rxDummy;
 
+#if (BOOT_COM_MBRTU_CHANNEL_INDEX < 5) /* USART or UART channel */
   LL_USART_InitTypeDef USART_InitStruct = {0};
+#else /* LPUART channel */
+  LL_LPUART_InitTypeDef LPUART_InitStruct = {0};
+#endif
 
-  /* The current implementation supports USART1 - UART5. throw an assertion error in case
-   * a different UART channel is configured.
+  /* The current implementation supports USART1 - UART5 and LPUART1. throw an assertion
+   * error in case a different UART channel is configured.
    */
   ASSERT_CT((BOOT_COM_MBRTU_CHANNEL_INDEX == 0) ||
             (BOOT_COM_MBRTU_CHANNEL_INDEX == 1) ||
             (BOOT_COM_MBRTU_CHANNEL_INDEX == 2) ||
             (BOOT_COM_MBRTU_CHANNEL_INDEX == 3) ||
-            (BOOT_COM_MBRTU_CHANNEL_INDEX == 4));
+            (BOOT_COM_MBRTU_CHANNEL_INDEX == 4) ||
+            (BOOT_COM_MBRTU_CHANNEL_INDEX == 5));
 
   /* calculate the 3.5 character delay time in free running counter ticks. note that
    * the free running counter runs at 100 kHz, so one tick is 10 us. For baudrates >
@@ -120,6 +134,7 @@ void MbRtuInit(void)
                                     BOOT_COM_MBRTU_BAUDRATE) + 1);
   }
 
+#if (BOOT_COM_MBRTU_CHANNEL_INDEX < 5) /* USART or UART channel */
   /* disable the UART peripheral */
   LL_USART_Disable(USART_CHANNEL);
   /* configure UART peripheral */
@@ -150,6 +165,36 @@ void MbRtuInit(void)
   LL_USART_DisableFIFO(USART_CHANNEL);
   LL_USART_ConfigAsyncMode(USART_CHANNEL);
   LL_USART_Enable(USART_CHANNEL);
+#else /* LPUART channel */
+  /* disable the peripheral */
+  LL_LPUART_Disable(USART_CHANNEL);
+  /* configure UART peripheral */
+  LPUART_InitStruct.PrescalerValue = LL_LPUART_PRESCALER_DIV8;
+  LPUART_InitStruct.BaudRate = BOOT_COM_MBRTU_BAUDRATE;
+  #if (BOOT_COM_MBRTU_STOPBITS == 1)
+  LPUART_InitStruct.StopBits = LL_LPUART_STOPBITS_1;
+  #else
+  LPUART_InitStruct.StopBits = LL_LPUART_STOPBITS_2;
+  #endif
+  #if (BOOT_COM_MBRTU_PARITY == 0)
+  LPUART_InitStruct.Parity = LL_LPUART_PARITY_NONE;
+  LPUART_InitStruct.DataWidth = LL_LPUART_DATAWIDTH_8B;
+  #elif (BOOT_COM_MBRTU_PARITY == 1)
+  LPUART_InitStruct.Parity = LL_LPUART_PARITY_ODD;
+  LPUART_InitStruct.DataWidth = LL_LPUART_DATAWIDTH_9B;
+  #else
+  LPUART_InitStruct.Parity = LL_LPUART_PARITY_EVEN;
+  LPUART_InitStruct.DataWidth = LL_LPUART_DATAWIDTH_9B;
+  #endif
+  LPUART_InitStruct.TransferDirection = LL_LPUART_DIRECTION_TX_RX;
+  LPUART_InitStruct.HardwareFlowControl = LL_LPUART_HWCONTROL_NONE;
+  /* initialize the LPUART peripheral */
+  LL_LPUART_Init(USART_CHANNEL, &LPUART_InitStruct);
+  LL_LPUART_DisableFIFO(USART_CHANNEL);
+  LL_LPUART_SetTXFIFOThreshold(USART_CHANNEL, LL_LPUART_FIFOTHRESHOLD_1_8);
+  LL_LPUART_SetRXFIFOThreshold(USART_CHANNEL, LL_LPUART_FIFOTHRESHOLD_1_8);
+  LL_LPUART_Enable(USART_CHANNEL);
+#endif
   /* enable the receiver output to be able to receive. */
   MbRtuDriverOutputControlHook(BLT_FALSE);
 
@@ -372,6 +417,7 @@ static blt_bool MbRtuReceiveByte(blt_int8u *data)
 {
   blt_bool result = BLT_FALSE;
 
+#if (BOOT_COM_MBRTU_CHANNEL_INDEX < 5) /* USART or UART channel */
   /* check if a new byte was received on the configured channel */
   if (LL_USART_IsActiveFlag_RXNE(USART_CHANNEL) != 0)
   {
@@ -411,6 +457,48 @@ static blt_bool MbRtuReceiveByte(blt_int8u *data)
     /* retrieve and store the newly received byte */
     *data = LL_USART_ReceiveData8(USART_CHANNEL);
   }
+#else /* LPUART channel */
+  /* check if a new byte was received on the configured channel */
+  if (LL_LPUART_IsActiveFlag_RXNE(USART_CHANNEL) != 0)
+  {
+    /* update the result */
+    result = BLT_TRUE;
+    /* check for a frame error. the frame error check is important because it can detect
+     * a missing stopbit. on an RS485 bus without bias resistors, the A-B differential
+     * voltage is 0. for an RS485 transceiver this is neither a 0 nor a 1 bit, so
+     * undefined. most RS485 transceivers feature a reception failsafe function to drive
+     * the Rx output (going to the UART Rx) to a defined state of logic 1. in case the
+     * used RS485 transceiver doesn't have such a feature, it typically leaves the Rx
+     * output in a logic 0 state. this means that after the stop bit of the last packet
+     * byte, the UART Rx input sees a logic 0, and assumes it is a start bit. the
+     * remaining data bits will always be 0 and, most importantly no stop bit is
+     * present, causing a framing error. Long story short: if you don't check for the
+     * framing error flag, you might receive an extra byte with value 0, which is not
+     * actually transmitted on the RS485 bus. you can catch and ignore this byte by doing
+     * a frame error check.
+     */
+    if (LL_LPUART_IsActiveFlag_FE(USART_CHANNEL) != 0)
+    {
+      /* clear the error flag. */
+      LL_LPUART_ClearFlag_FE(USART_CHANNEL);
+      /* ignore the byte because of a detected frame error. */
+      result = BLT_FALSE;
+    }
+    #if (BOOT_COM_MBRTU_PARITY > 0)
+    /* check for a parity error. */
+    if (LL_LPUART_IsActiveFlag_PE(USART_CHANNEL) != 0)
+    {
+      /* clear the error flag. */
+      LL_LPUART_ClearFlag_PE(USART_CHANNEL);
+      /* ignore the byte because of a detected parity error. */
+      result = BLT_FALSE;
+    }
+    #endif
+    /* retrieve and store the newly received byte */
+    *data = LL_LPUART_ReceiveData8(USART_CHANNEL);
+  }
+#endif
+
   /* give the result back to the caller */
   return result;
 } /*** end of MbRtuReceiveByte ***/
@@ -428,6 +516,7 @@ static void MbRtuTransmitByte(blt_int8u data, blt_bool end_of_packet)
 {
   blt_int32u timeout;
 
+#if (BOOT_COM_MBRTU_CHANNEL_INDEX < 5) /* USART or UART channel */
   /* write byte to transmit holding register */
   LL_USART_TransmitData8(USART_CHANNEL, data);
   /* set timeout time to wait for transmit completion. */
@@ -466,6 +555,46 @@ static void MbRtuTransmitByte(blt_int8u data, blt_bool end_of_packet)
       }
     }
   }
+#else /* LPUART channel */
+  /* write byte to transmit holding register */
+  LL_LPUART_TransmitData8(USART_CHANNEL, data);
+  /* set timeout time to wait for transmit completion. */
+  timeout = TimerGet() + MBRTU_BYTE_TX_TIMEOUT_MS;
+
+  /* not the last byte of the packet? */
+  if (end_of_packet == BLT_FALSE)
+  {
+    /* wait for tx holding register to be empty */
+    while (LL_LPUART_IsActiveFlag_TXE(USART_CHANNEL) == 0)
+    {
+      /* keep the watchdog happy */
+      CopService();
+      /* break loop upon timeout. this would indicate a hardware failure. */
+      if (TimerGet() > timeout)
+      {
+        break;
+      }
+    }
+  }
+  /* this is the last byte of a packet. */
+  else
+  {
+    /* wait for tx complete event. this is needed for the last byte, otherwise the
+     * transceiver's transmit output gets disabled with MbRtuDriverOutputControlHook()
+     * before the byte reception completes.
+     */
+    while (LL_LPUART_IsActiveFlag_TC(USART_CHANNEL) == 0)
+    {
+      /* keep the watchdog happy */
+      CopService();
+      /* break loop upon timeout. this would indicate a hardware failure. */
+      if (TimerGet() > timeout)
+      {
+        break;
+      }
+    }
+  }
+#endif
 } /*** end of MbRtuTransmitByte ***/
 
 
