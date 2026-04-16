@@ -31,6 +31,9 @@
 ****************************************************************************************/
 #include "boot.h"                                /* bootloader generic header          */
 
+#if (BOOT_BOOTLOADER_INFO_ENABLE > 0)
+extern const tBootloaderInfo bootloaderInfo;
+#endif
 
 #if (BOOT_COM_ENABLE > 0)
 /****************************************************************************************
@@ -1613,12 +1616,7 @@ static void XcpCmdProgramPrepare(blt_int8u *data)
 ****************************************************************************************/
 static void XcpCmdUser(blt_int8u *data)
 {
-  blt_int8u subCommand;
-
-  /* Read out the sub command code. */
-  subCommand = data[1];
-
-  /* Dispatch sub command handling. */
+  blt_int8u subCommand = data[1];
   switch (subCommand)
   {
 #if (BOOT_INFO_TABLE_ENABLE > 0)
@@ -1626,7 +1624,11 @@ static void XcpCmdUser(blt_int8u *data)
     XcpCmdUserSubCmdInfoTable(data);
     break;
 #endif
-
+#if (BOOT_BOOTLOADER_INFO_ENABLE > 0)
+  case XCP_CMD_USER_SUB_BOOTINFO:
+    XcpCmdUserSubCmdBootInfo(data);
+    break;
+#endif
   default:
     XcpSetCtoError(data[0], XCP_ERR_CMD_UNKNOWN);
     break;
@@ -1645,26 +1647,23 @@ static void XcpCmdUser(blt_int8u *data)
 ****************************************************************************************/
 static void XcpCmdUserSubCmdInfoTable(blt_int8u *data)
 {
-  blt_int8u commandId;
-
-  /* Read out the command ID. */
-  commandId = data[2];
-
-  /* Dispatch info table command ID handling. */
+  blt_int8u commandId = data[2];
   switch (commandId)
   {
   case XCP_CMD_IT_CID_GETINFO:
     XcpCmdUserSubCmdInfoTableCidGetInfo(data);
     break;
-
   case XCP_CMD_IT_CID_DOWNLOAD:
     XcpCmdUserSubCmdInfoTableCidDownload(data);
     break;
-
   case XCP_CMD_IT_CID_CHECK:
     XcpCmdUserSubCmdInfoTableCidCheck(data);
     break;
-
+#if (BOOT_INFO_TABLE_ENABLE > 0)
+  case XCP_CMD_IT_CID_READ:   /* <-- НОВЫЙ CASE */
+    XcpCmdUserSubCmdInfoTableCidRead(data);
+    break;
+#endif
   default:
     XcpSetCtoError(data[0], XCP_ERR_CMD_UNKNOWN);
     break;
@@ -1781,6 +1780,49 @@ static void XcpCmdUserSubCmdInfoTableCidCheck(blt_int8u *data)
 } /*** end of XcpCmdUserSubCmdInfoTableCidCheck ***/
 #endif /* BOOT_INFO_TABLE_ENABLE > 0 */
 
+/*----------------------------------------------------------------------------
+ * XCP USER Subcommand: Bootloader Info
+ *----------------------------------------------------------------------------*/
+#if (BOOT_BOOTLOADER_INFO_ENABLE > 0)
+static void XcpCmdUserSubCmdBootInfo(blt_int8u *data)
+{
+    if (data[2] == XCP_CMD_BI_CID_GETINFO) {
+        blt_int16u len = sizeof(bootloaderInfo);
+        blt_addr addr = (blt_addr)&bootloaderInfo;
+
+        xcpInfo.ctoData[0] = XCP_PID_RES;
+        xcpInfo.ctoData[1] = XCP_CMD_BI_CID_GETINFO;
+        CpuMemCopy((blt_addr)&xcpInfo.ctoData[2], (blt_addr)&len, sizeof(len));
+        CpuMemCopy((blt_addr)&xcpInfo.ctoData[4], (blt_addr)&addr, sizeof(addr));
+        xcpInfo.ctoLen = 8;
+    } else {
+        XcpSetCtoError(data[0], XCP_ERR_CMD_UNKNOWN);
+    }
+}
+#endif /* BOOT_BOOTLOADER_INFO_ENABLE > 0 */
+
+/*----------------------------------------------------------------------------
+ * XCP USER Subcommand: Info Table READ (прямое чтение)
+ *----------------------------------------------------------------------------*/
+#if (BOOT_INFO_TABLE_ENABLE > 0)
+static void XcpCmdUserSubCmdInfoTableCidRead(blt_int8u *data)
+{
+    blt_addr   tableAddr = InfoTableGetPtr(INFO_TABLE_ID_FIRMWARE_NVM);
+    blt_int16u tableLen  = InfoTableCurrentSize(INFO_TABLE_ID_FIRMWARE_NVM);
+    blt_int8u *srcPtr    = (blt_int8u *)tableAddr;
+
+    if (tableLen > (XCP_CTO_PACKET_LEN - 3)) {
+        XcpSetCtoError(data[0], XCP_ERR_OUT_OF_RANGE);
+        return;
+    }
+
+    xcpInfo.ctoData[0] = XCP_PID_RES;
+    xcpInfo.ctoData[1] = XCP_CMD_IT_CID_READ;
+    xcpInfo.ctoData[2] = (blt_int8u)tableLen;
+    CpuMemCopy((blt_addr)&xcpInfo.ctoData[3], (blt_addr)srcPtr, tableLen);
+    xcpInfo.ctoLen = 3 + tableLen;
+}
+#endif /* BOOT_INFO_TABLE_ENABLE > 0 */
 
 #endif /* BOOT_COM_ENABLE > 0 */
 

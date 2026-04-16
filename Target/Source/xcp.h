@@ -205,6 +205,8 @@
 /* XCP USER sub command codes */
 /** \brief XCP CMD USER sub command code of the info table feature. */
 #define XCP_CMD_USER_SUB_INFOTABLE  (0x17)
+/** \brief XCP CMD USER sub command code of the bootloader info table feature. */
+#define XCP_CMD_USER_SUB_BOOTINFO   (0x18)
 
 /* XCP USER info table sub command related command id's  */
 /** \brief XCP USER info table GET_INFO command ID. */
@@ -213,6 +215,8 @@
 #define XCP_CMD_IT_CID_DOWNLOAD     (0x06)
 /** \brief XCP USER info table CHECK sub command ID. */
 #define XCP_CMD_IT_CID_CHECK        (0x08)
+/** \brief XCP USER info table READ sub command ID. */
+#define XCP_CMD_IT_CID_READ         (0x0A)
 
 /* xcp supported resources */
 /** \brief ProGraMming resource. */
