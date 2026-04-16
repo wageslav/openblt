@@ -32,7 +32,17 @@
 #include "boot.h"                                /* bootloader generic header          */
 
 #if (BOOT_BOOTLOADER_INFO_ENABLE > 0)
-extern const tBootloaderInfo bootloaderInfo;
+/* Forward declaration структуры бутлоадера, определённой в bootinfo.c */
+struct tBootloaderInfo;
+extern const struct tBootloaderInfo bootloaderInfo;
+#endif
+
+#if (BOOT_BOOTLOADER_INFO_ENABLE > 0)
+static void XcpCmdUserSubCmdBootInfo(blt_int8u *data);
+#endif
+
+#if (BOOT_INFO_TABLE_ENABLE > 0)
+static void XcpCmdUserSubCmdInfoTableCidRead(blt_int8u *data);
 #endif
 
 #if (BOOT_COM_ENABLE > 0)
@@ -1616,7 +1626,12 @@ static void XcpCmdProgramPrepare(blt_int8u *data)
 ****************************************************************************************/
 static void XcpCmdUser(blt_int8u *data)
 {
-  blt_int8u subCommand = data[1];
+  blt_int8u subCommand;
+
+  /* Read out the sub command code. */
+  subCommand = data[1];
+
+  /* Dispatch sub command handling. */
   switch (subCommand)
   {
 #if (BOOT_INFO_TABLE_ENABLE > 0)
@@ -1647,7 +1662,12 @@ static void XcpCmdUser(blt_int8u *data)
 ****************************************************************************************/
 static void XcpCmdUserSubCmdInfoTable(blt_int8u *data)
 {
-  blt_int8u commandId = data[2];
+  blt_int8u commandId;
+
+  /* Read out the command ID. */
+  commandId = data[2];
+
+  /* Dispatch info table command ID handling. */
   switch (commandId)
   {
   case XCP_CMD_IT_CID_GETINFO:
@@ -1660,7 +1680,7 @@ static void XcpCmdUserSubCmdInfoTable(blt_int8u *data)
     XcpCmdUserSubCmdInfoTableCidCheck(data);
     break;
 #if (BOOT_INFO_TABLE_ENABLE > 0)
-  case XCP_CMD_IT_CID_READ:   /* <-- НОВЫЙ CASE */
+  case XCP_CMD_IT_CID_READ:
     XcpCmdUserSubCmdInfoTableCidRead(data);
     break;
 #endif
@@ -1668,7 +1688,7 @@ static void XcpCmdUserSubCmdInfoTable(blt_int8u *data)
     XcpSetCtoError(data[0], XCP_ERR_CMD_UNKNOWN);
     break;
   }
-} /*** end of XcpCmdUserSubCmdInfoTable ***/
+}/*** end of XcpCmdUserSubCmdInfoTable ***/
 
 
 /************************************************************************************//**
@@ -1787,6 +1807,18 @@ static void XcpCmdUserSubCmdInfoTableCidCheck(blt_int8u *data)
 static void XcpCmdUserSubCmdBootInfo(blt_int8u *data)
 {
     if (data[2] == XCP_CMD_BI_CID_GETINFO) {
+        /* bootinfo.c */
+        extern const struct tBootloaderInfo {
+            blt_int32u signature;
+            blt_int16u structVersion;
+            blt_int16u hwRevision;
+            blt_int16u verMain;
+            blt_int16u verMinor;
+            blt_int16u verPatch;
+            blt_int32u buildDate;
+            blt_int8u  commitHash[8];
+        } bootloaderInfo;
+
         blt_int16u len = sizeof(bootloaderInfo);
         blt_addr addr = (blt_addr)&bootloaderInfo;
 
