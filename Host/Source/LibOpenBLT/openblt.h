@@ -68,7 +68,8 @@ extern "C" {
 
 /** \brief Function return value for when a generic error occured. */
 #define BLT_RESULT_ERROR_GENERIC       (1u)
-
+#define BLT_RESULT_ERROR_BOOTINFO_NOT_FOUND      (35u)
+#define BLT_RESULT_ERROR_FIRMWAREINFO_NOT_FOUND  (36u)
 
 /****************************************************************************************
 *             V E R S I O N   I N F O R M A T I O N
@@ -218,6 +219,46 @@ typedef struct t_blt_transport_settings_xcp_v10_mbrtu
   uint8_t destinationAddr;       /**< Destination address (receiver node ID).          */
 } tBltTransportSettingsXcpV10MbRtu;
 
+/****************************************************************************************
+*             B O O T L O A D E R   &   F I R M W A R E   I N F O
+****************************************************************************************/
+/****************************************************************************************
+* Type definitions
+****************************************************************************************/
+/** \brief Structure containing bootloader information as retrieved from the target.
+ *         The data is stored in a non-volatile info table that the bootloader
+ *         optionally includes. The signature field can be used to verify the presence
+ *         of the table. Use \ref BltSessionGetBootloaderInfo to obtain the data.
+ */
+typedef struct t_blt_bootloader_info
+{
+  uint32_t signature;       /**< Info table signature (0xB00710AD).                   */
+  uint16_t structVersion;   /**< Version of this structure (should be 1).             */
+  uint16_t hwRevision;      /**< Hardware revision number of the target.              */
+  uint16_t verMain;         /**< Bootloader main version number.                      */
+  uint16_t verMinor;        /**< Bootloader minor version number.                     */
+  uint16_t verPatch;        /**< Bootloader patch version number.                     */
+  uint32_t buildDate;       /**< Build date in YYYYMMDD format.                       */
+  uint8_t  commitHash[8];   /**< Git commit hash (first 8 bytes) of the bootloader.   */
+} tBltBootloaderInfo;
+
+/** \brief Structure containing firmware information as retrieved from the target.
+ *         This data is stored in a separate info table (version 2) that the
+ *         application firmware can provide. The signature field verifies the
+ *         table's validity. Use \ref BltSessionGetFirmwareInfo to read this data.
+ */
+typedef struct t_blt_firmware_info
+{
+  uint32_t signature;       /**< Info table signature (0x9A4B8107).                   */
+  uint16_t structVersion;   /**< Version of this structure (should be 2).             */
+  uint16_t hwRevision;      /**< Required or actual hardware revision.                */
+  uint32_t productId;       /**< Product or application identifier.                   */
+  uint32_t firmwareVersion; /**< Firmware version (e.g., packed BCD or simple number).*/
+  uint32_t buildDate;       /**< Build date in YYYYMMDD format.                       */
+  uint8_t  commitHash[8];   /**< Git commit hash (first 8 bytes) of the firmware.     */
+  uint16_t status;          /**< Firmware status (e.g., valid, invalid, updating).    */
+  uint16_t reserved;        /**< Reserved for future use.                             */
+} tBltFirmwareInfo;
 
 /****************************************************************************************
 * Function prototypes
@@ -235,7 +276,8 @@ LIBOPENBLT_EXPORT uint32_t BltSessionWriteData(uint32_t address, uint32_t len,
 LIBOPENBLT_EXPORT uint32_t BltSessionReadData(uint32_t address, uint32_t len, 
                                               uint8_t * data);
 LIBOPENBLT_EXPORT uint32_t BltSessionCheckInfoTable(void);
-
+LIBOPENBLT_EXPORT uint32_t BltSessionGetBootloaderInfo(tBltBootloaderInfo * info);
+LIBOPENBLT_EXPORT uint32_t BltSessionGetFirmwareInfo(tBltFirmwareInfo * info);
 
 /****************************************************************************************
 *             F I R M W A R E   D A T A

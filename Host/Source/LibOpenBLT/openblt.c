@@ -853,6 +853,55 @@ LIBOPENBLT_EXPORT uint32_t BltUtilCryptoAes256Decrypt(uint8_t * data, uint32_t l
   return result;
 } /*** end of BltUtilCryptoAes256Decrypt ***/
 
+/************************************************************************************//**
+** \brief     Retrieves the bootloader information from the target.
+** \param     info Pointer to structure where the info will be stored.
+** \return    BLT_RESULT_OK if successful, BLT_RESULT_ERROR_xxx otherwise.
+****************************************************************************************/
+LIBOPENBLT_EXPORT uint32_t BltSessionGetBootloaderInfo(tBltBootloaderInfo * info)
+{
+  uint32_t result = BLT_RESULT_ERROR_GENERIC;
+
+  /* Check parameters. */
+  assert(info != NULL);
+  if (info != NULL) /*lint !e774 */
+  {
+    if (XcpLoaderGetBootloaderInfo(info))
+    {
+      result = BLT_RESULT_OK;
+    }
+    else
+    {
+      result = BLT_RESULT_ERROR_BOOTINFO_NOT_FOUND;
+    }
+  }
+  return result;
+}
+
+/************************************************************************************//**
+** \brief     Retrieves the firmware information (Info Table V2) from the target.
+** \param     info Pointer to structure where the info will be stored.
+** \return    BLT_RESULT_OK if successful, BLT_RESULT_ERROR_xxx otherwise.
+****************************************************************************************/
+LIBOPENBLT_EXPORT uint32_t BltSessionGetFirmwareInfo(tBltFirmwareInfo * info)
+{
+  uint32_t result = BLT_RESULT_ERROR_GENERIC;
+
+  /* Check parameters. */
+  assert(info != NULL);
+  if (info != NULL) /*lint !e774 */
+  {
+    if (XcpLoaderGetFirmwareInfo(info))
+    {
+      result = BLT_RESULT_OK;
+    }
+    else
+    {
+      result = BLT_RESULT_ERROR_FIRMWAREINFO_NOT_FOUND;
+    }
+  }
+  return result;
+}
 
 /*********************************** end of openblt.c **********************************/
 

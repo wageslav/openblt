@@ -45,6 +45,14 @@ extern "C" {
 #endif
 
 /****************************************************************************************
+* Include files
+****************************************************************************************/
+#include <stdint.h>                         /* for standard integer types              */
+#include <stdbool.h>                        /* for boolean type                        */
+#include "openblt.h"                        /* for public type definitions             */
+
+
+/****************************************************************************************
 * Macro definitions
 ****************************************************************************************/
 /** \brief Total number of bytes in a master<->slave data packet. It should be at least
@@ -108,7 +116,10 @@ typedef struct t_xcp_loader_settings
 /****************************************************************************************
 * Function prototypes
 ****************************************************************************************/
-tSessionProtocol const * XcpLoaderGetProtocol(void);  
+tSessionProtocol const * XcpLoaderGetProtocol(void);
+bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info);
+bool XcpLoaderGetFirmwareInfo(tBltFirmwareInfo * info);
+
 
 #ifdef __cplusplus
 }

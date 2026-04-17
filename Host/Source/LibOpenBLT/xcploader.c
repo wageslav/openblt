@@ -70,12 +70,16 @@
 
 /* XCP sub command codes for the custom XCP USER_CMD commands. */
 #define XCPLOADER_USER_CMD_INFOTABLE  (0x17u)    /**< Info table sub command code.     */
+#define XCPLOADER_USER_CMD_BOOTINFO   (0x18u)    /**< Bootloader info sub command code.*/
 
 /* Info table command IDs for XCPLOADER_USER_CMD_INFOTABLE */
 #define XCPLOADER_IT_CID_GETINFO      (0x04u)    /**< Info table GET_INFO command ID.  */
 #define XCPLOADER_IT_CID_DOWNLOAD     (0x06u)    /**< Info table DOWNLOAD command ID.  */
 #define XCPLOADER_IT_CID_CHECK        (0x08u)    /**< Info table CHECK command ID.     */
+#define XCPLOADER_IT_CID_READ         (0x0Au)    /**< Info table READ command ID.      */
 
+/* Bootloader info command IDs for XCPLOADER_USER_CMD_BOOTINFO */
+#define XCPLOADER_BI_CID_GETINFO      (0x04u)    /**< Bootloader info GET_INFO cmd ID. */
 
 /****************************************************************************************
 * Function prototypes
@@ -111,8 +115,9 @@ static bool XcpLoaderSendCmdProgramClear(uint32_t length);
 static bool XcpLoaderSendCmdItCidGetInfo(uint32_t * tableAddress, uint16_t * tableLen);
 static bool XcpLoaderSendCmdItCidDownload(uint8_t const * data, uint8_t len);
 static bool XcpLoaderSendCmdItCidCheck(bool * checkOkay);
-
-
+/* Bootloader info command functions. */
+static bool XcpLoaderSendCmdBiCidGetInfo(uint32_t * tableAddress, uint16_t * tableLen);
+static bool XcpLoaderSendCmdItCidRead(uint8_t * data, uint16_t length);
 /****************************************************************************************
 * Local constant declarations
 ****************************************************************************************/
@@ -1921,5 +1926,398 @@ static bool XcpLoaderSendCmdItCidCheck(bool * checkOkay)
 
 } /*** end of XcpLoaderSendCmdItCidCheck **/
 
+/************************************************************************************//**
+** \brief     Sends the bootloader info GET_INFO XCP USER command. 
+** \details   Requests the base address and length of the bootloader info structure.
+** \param     tableAddress The base address of the bootloader info structure.
+** \param     tableLen The length of the bootloader info structure in bytes. 
+** \return    True if successful, false otherwise.
+**
+****************************************************************************************/
+static bool XcpLoaderSendCmdBiCidGetInfo(uint32_t * tableAddress, uint16_t * tableLen)
+{
+  bool result = false;
+  tXcpTransportPacket cmdPacket;
+  tXcpTransportPacket resPacket;
+
+  /* Make sure a valid transport layer is linked and that the parameters are valid. */
+  assert(xcpSettings.transport != NULL);
+  assert(tableAddress != NULL);
+  assert(tableLen != NULL);
+
+  /* Only continue with a valid transport layer and parameters. */
+  if ((xcpSettings.transport != NULL) && (tableAddress != NULL) && (tableLen != NULL)) /*lint !e774 */
+  {
+    /* Init the result value to okay and only set it to error when a problem occurred. */
+    result = true;
+    /* Initialize the outgoing parameter values. */
+    *tableAddress = 0x00000000UL;
+    *tableLen = 0U;
+    /* Prepare the command packet. */
+    cmdPacket.data[0] = XCPLOADER_CMD_USER;                /* XCP USER CMD.            */
+    cmdPacket.data[1] = XCPLOADER_USER_CMD_BOOTINFO;       /* Sub command code.        */
+    cmdPacket.data[2] = XCPLOADER_BI_CID_GETINFO;          /* GET_INFO command ID.     */
+    cmdPacket.len = 3U;
+    /* Send the packet. */
+    if (!xcpSettings.transport->SendPacket(&cmdPacket, &resPacket, 
+                                           xcpSettings.timeoutT1))
+    {
+      /* Could not send packet or receive response within the specified timeout. */
+      result = false;
+    }
+    /* Only continue if a response was received. */
+    if (result)
+    {
+      /* Check if the response was valid. */
+      if ((resPacket.len != 8U) || (resPacket.data[0] != XCPLOADER_CMD_PID_RES))
+      {
+        /* Not a valid or positive response. */
+        result = false;
+      }
+    }
+    /* Only continue if a valid response was received. */
+    if (result)
+    {
+      /* Read out the bootloader info length and base address from the response. */
+      *tableLen = XcpLoaderGetOrderedWord(&resPacket.data[2]);
+      *tableAddress = XcpLoaderGetOrderedLong(&resPacket.data[4]);
+      /* Evaluate the table length. */
+      if (*tableLen == 0U)
+      {
+        /* Invalid table. Flag the error. */
+        result = false;
+      }
+    }
+  }
+  /* Give the result back to the caller. */
+  return result;
+} /*** end of XcpLoaderSendCmdBiCidGetInfo ***/
+
+
+/************************************************************************************//**
+** \brief     Sends the info table READ XCP USER command. 
+** \details   Requests direct read of the info table contents.
+** \param     data Pointer to the buffer where the info table data will be stored.
+** \param     length The length of the info table in bytes.
+** \return    True if successful, false otherwise.
+**
+****************************************************************************************/
+static bool XcpLoaderSendCmdItCidRead(uint8_t * data, uint16_t length)
+{
+  bool result = false;
+  tXcpTransportPacket cmdPacket;
+  tXcpTransportPacket resPacket;
+
+  /* Make sure a valid transport layer is linked and that the parameters are valid. */
+  assert(xcpSettings.transport != NULL);
+  assert(data != NULL);
+  assert(length > 0);
+
+  /* Only continue with a valid transport layer and parameters. */
+  if ((xcpSettings.transport != NULL) && (data != NULL) && (length > 0)) /*lint !e774 */
+  {
+    /* Init the result value to okay and only set it to error when a problem occurred. */
+    result = true;
+    /* Prepare the command packet. */
+    cmdPacket.data[0] = XCPLOADER_CMD_USER;                /* XCP USER CMD.            */
+    cmdPacket.data[1] = XCPLOADER_USER_CMD_INFOTABLE;      /* Sub command code.        */
+    cmdPacket.data[2] = XCPLOADER_IT_CID_READ;             /* READ command ID.         */
+    cmdPacket.len = 3U;
+    /* Send the packet. */
+    if (!xcpSettings.transport->SendPacket(&cmdPacket, &resPacket,
+                                           xcpSettings.timeoutT1))
+    {
+      /* Could not send packet or receive response within the specified timeout. */
+      result = false;
+    }
+    /* Only continue if a response was received. */
+    if (result)
+    {
+      /* Check if the response was valid. */
+      if ((resPacket.len < 3U) || (resPacket.data[0] != XCPLOADER_CMD_PID_RES))
+      {
+        /* Not a valid or positive response. */
+        result = false;
+      }
+    }
+    /* Only continue if a valid response was received. */
+    if (result)
+    {
+      uint8_t returnedLength = resPacket.data[2];
+      
+      /* Verify that the returned length matches what we expected. */
+      if (returnedLength != length)
+      {
+        result = false;
+      }
+      else
+      {
+        /* Copy the info table data from the response. */
+        for (uint8_t idx = 0; idx < length; idx++)
+        {
+          data[idx] = resPacket.data[idx + 3];
+        }
+      }
+    }
+  }
+  /* Give the result back to the caller. */
+  return result;
+} /*** end of XcpLoaderSendCmdItCidRead ***/
+
+
+/************************************************************************************//**
+** \brief     Obtains the bootloader information from the target.
+** \param     info Pointer to structure where the bootloader info will be stored.
+** \return    True if successful, false otherwise.
+**
+****************************************************************************************/
+bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
+{
+  bool result = false;
+  uint32_t infoAddress = 0U;
+  uint16_t infoLength = 0U;
+  uint8_t * infoData = NULL;
+
+  /* Check parameters. */
+  assert(info != NULL);
+  /* Make sure a valid transport layer is linked and we are connected. */
+  assert(xcpSettings.transport != NULL);
+
+  /* Only continue if the parameters are valid and the session is connected. */
+  if ((info != NULL) && (xcpSettings.transport != NULL) && (xcpConnected)) /*lint !e774 */
+  {
+    /* Initialize the result value to okay. */
+    result = true;
+
+    /* ----------------------- GET_INFO XCP USER command ------------------------------ */
+    /* Request the address and length of the bootloader info structure. */
+    if (!XcpLoaderSendCmdBiCidGetInfo(&infoAddress, &infoLength))
+    {
+      /* Problem occurred during the command exchange with the target. */
+      result = false;
+    }
+    /* Command exchange with the target successful. Check if info is available. */
+    else if (infoLength == 0U)
+    {
+      /* No bootloader info available. */
+      result = false;
+    }
+
+    /* ----------------------- Read bootloader info data ------------------------------ */
+    /* Only continue if no error was detected sofar. */
+    if (result)
+    {
+      /* Allocate memory for reading the bootloader info data. */
+      infoData = (uint8_t *)malloc(infoLength);
+      
+      /* Verify allocation results. */
+      if (infoData == NULL)
+      {
+        result = false;
+      }
+    }
+
+    /* Only continue if no error was detected sofar. */
+    if (result)
+    {
+      /* Read the bootloader info data from the target. */
+      if (!XcpLoaderReadData(infoAddress, infoLength, infoData))
+      {
+        result = false;
+      }
+    }
+
+    /* ----------------------- Parse bootloader info data ----------------------------- */
+    /* Only continue if no error was detected sofar. */
+    if (result)
+    {
+      uint32_t signature;
+      uint16_t structVersion;
+      
+      /* Parse the data assuming little-endian byte order (STM32). */
+      signature = (uint32_t)infoData[0] | 
+                  ((uint32_t)infoData[1] << 8) |
+                  ((uint32_t)infoData[2] << 16) |
+                  ((uint32_t)infoData[3] << 24);
+                  
+      /* Check the signature. */
+      if (signature != 0xB00710ADUL)
+      {
+        /* Invalid signature. */
+        result = false;
+      }
+      else
+      {
+        /* Parse the rest of the structure. */
+        info->signature = signature;
+        info->structVersion = (uint16_t)infoData[4] | ((uint16_t)infoData[5] << 8);
+        info->hwRevision = (uint16_t)infoData[6] | ((uint16_t)infoData[7] << 8);
+        info->verMain = (uint16_t)infoData[8] | ((uint16_t)infoData[9] << 8);
+        info->verMinor = (uint16_t)infoData[10] | ((uint16_t)infoData[11] << 8);
+        info->verPatch = (uint16_t)infoData[12] | ((uint16_t)infoData[13] << 8);
+        info->buildDate = (uint32_t)infoData[14] | 
+                          ((uint32_t)infoData[15] << 8) |
+                          ((uint32_t)infoData[16] << 16) |
+                          ((uint32_t)infoData[17] << 24);
+        
+        /* Copy commit hash. */
+        for (uint8_t i = 0; i < 8; i++)
+        {
+          info->commitHash[i] = infoData[18 + i];
+        }
+      }
+    }
+  }
+
+  /* Release possibly allocated memory. */
+  if (infoData != NULL)
+  {
+    free(infoData);
+  }
+
+  /* Give the result back to the caller. */
+  return result;
+} /*** end of XcpLoaderGetBootloaderInfo ***/
+
+
+/************************************************************************************//**
+** \brief     Obtains the firmware information (Info Table) from the target.
+** \param     info Pointer to structure where the firmware info will be stored.
+** \return    True if successful, false otherwise.
+**
+****************************************************************************************/
+bool XcpLoaderGetFirmwareInfo(tBltFirmwareInfo * info)
+{
+  bool result = false;
+  uint32_t infoAddress = 0U;
+  uint16_t infoLength = 0U;
+  uint8_t * infoData = NULL;
+  bool directReadSuccess = false;
+
+  /* Check parameters. */
+  assert(info != NULL);
+  /* Make sure a valid transport layer is linked and we are connected. */
+  assert(xcpSettings.transport != NULL);
+
+  /* Only continue if the parameters are valid and the session is connected. */
+  if ((info != NULL) && (xcpSettings.transport != NULL) && (xcpConnected)) /*lint !e774 */
+  {
+    /* Initialize the result value to okay. */
+    result = true;
+
+    /* ----------------------- Try direct READ command first -------------------------- */
+    /* First, try to get the info table length via GET_INFO. */
+    if (!XcpLoaderSendCmdItCidGetInfo(&infoAddress, &infoLength))
+    {
+      /* Could not get info table info. */
+      result = false;
+    }
+    else if (infoLength > 0U)
+    {
+      /* Allocate memory for the info table data. */
+      infoData = (uint8_t *)malloc(infoLength);
+      
+      if (infoData != NULL)
+      {
+        /* Try direct READ command. */
+        if (XcpLoaderSendCmdItCidRead(infoData, (uint8_t)infoLength))
+        {
+          directReadSuccess = true;
+        }
+        else
+        {
+          /* Direct read failed, fall back to UPLOAD. */
+          free(infoData);
+          infoData = NULL;
+        }
+      }
+    }
+
+    /* ----------------------- Fallback to UPLOAD if direct read failed ---------------- */
+    if (result && !directReadSuccess && (infoLength > 0U))
+    {
+      /* Allocate memory again if needed. */
+      if (infoData == NULL)
+      {
+        infoData = (uint8_t *)malloc(infoLength);
+      }
+      
+      if (infoData != NULL)
+      {
+        /* Read the info table data using standard UPLOAD. */
+        if (!XcpLoaderReadData(infoAddress, infoLength, infoData))
+        {
+          result = false;
+        }
+      }
+      else
+      {
+        result = false;
+      }
+    }
+    else if (infoLength == 0U)
+    {
+      /* No info table available. */
+      result = false;
+    }
+
+    /* ----------------------- Parse firmware info data ------------------------------- */
+    /* Only continue if no error was detected sofar. */
+    if (result && (infoData != NULL))
+    {
+      uint32_t signature;
+      
+      /* Parse the signature (first 4 bytes, little-endian). */
+      signature = (uint32_t)infoData[0] | 
+                  ((uint32_t)infoData[1] << 8) |
+                  ((uint32_t)infoData[2] << 16) |
+                  ((uint32_t)infoData[3] << 24);
+                  
+      /* Check the signature. */
+      if (signature != 0x9A4B8107UL)
+      {
+        /* Invalid signature. */
+        result = false;
+      }
+      else
+      {
+        /* Parse the rest of the structure (Info Table V2, 32 bytes). */
+        info->signature = signature;
+        info->structVersion = (uint16_t)infoData[4] | ((uint16_t)infoData[5] << 8);
+        info->hwRevision = (uint16_t)infoData[6] | ((uint16_t)infoData[7] << 8);
+        info->productId = (uint32_t)infoData[8] | 
+                          ((uint32_t)infoData[9] << 8) |
+                          ((uint32_t)infoData[10] << 16) |
+                          ((uint32_t)infoData[11] << 24);
+        info->firmwareVersion = (uint32_t)infoData[12] | 
+                                ((uint32_t)infoData[13] << 8) |
+                                ((uint32_t)infoData[14] << 16) |
+                                ((uint32_t)infoData[15] << 24);
+        info->buildDate = (uint32_t)infoData[16] | 
+                          ((uint32_t)infoData[17] << 8) |
+                          ((uint32_t)infoData[18] << 16) |
+                          ((uint32_t)infoData[19] << 24);
+        
+        /* Copy commit hash (8 bytes). */
+        for (uint8_t i = 0; i < 8; i++)
+        {
+          info->commitHash[i] = infoData[20 + i];
+        }
+        
+        info->status = (uint16_t)infoData[28] | ((uint16_t)infoData[29] << 8);
+        info->reserved = (uint16_t)infoData[30] | ((uint16_t)infoData[31] << 8);
+      }
+    }
+  }
+
+  /* Release possibly allocated memory. */
+  if (infoData != NULL)
+  {
+    free(infoData);
+  }
+
+  /* Give the result back to the caller. */
+  return result;
+} /*** end of XcpLoaderGetFirmwareInfo ***/
 
 /*********************************** end of xcploader.c ********************************/
