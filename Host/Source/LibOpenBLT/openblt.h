@@ -240,6 +240,10 @@ typedef struct t_blt_bootloader_info
   uint16_t verPatch;        /**< Bootloader patch version number.                     */
   uint32_t buildDate;       /**< Build date in YYYYMMDD format.                       */
   uint8_t  commitHash[8];   /**< Git commit hash (first 8 bytes) of the bootloader.   */
+  // New fields for version 2
+  uint32_t bootloaderSize;  /**< Size of bootloader area in bytes.                    */
+  uint32_t appStartAddr;    /**< Start address of application area.                   */
+  uint32_t appSize;         /**< Size of application area in bytes.                   */
 } tBltBootloaderInfo;
 
 /** \brief Structure containing firmware information as retrieved from the target.

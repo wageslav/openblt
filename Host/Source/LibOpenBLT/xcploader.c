@@ -2140,7 +2140,7 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
                   ((uint32_t)infoData[2] << 16) |
                   ((uint32_t)infoData[3] << 24);
                   
-      /* Check the signature. */
+            /* Check the signature. */
       if (signature != 0xB00710ADUL)
       {
         /* Invalid signature. */
@@ -2164,6 +2164,30 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
         for (uint8_t i = 0; i < 8; i++)
         {
           info->commitHash[i] = infoData[18 + i];
+        }
+
+        /* If structure version is 2 or higher and we have enough data, parse extended fields. */
+        if (info->structVersion >= 2 && infoLength >= (18 + 8 + 12))
+        {
+          info->bootloaderSize = (uint32_t)infoData[26] | 
+                                 ((uint32_t)infoData[27] << 8) |
+                                 ((uint32_t)infoData[28] << 16) |
+                                 ((uint32_t)infoData[29] << 24);
+          info->appStartAddr  = (uint32_t)infoData[30] | 
+                                 ((uint32_t)infoData[31] << 8) |
+                                 ((uint32_t)infoData[32] << 16) |
+                                 ((uint32_t)infoData[33] << 24);
+          info->appSize       = (uint32_t)infoData[34] | 
+                                 ((uint32_t)infoData[35] << 8) |
+                                 ((uint32_t)infoData[36] << 16) |
+                                 ((uint32_t)infoData[37] << 24);
+        }
+        else
+        {
+          /* Extended fields not present; set to zero. */
+          info->bootloaderSize = 0U;
+          info->appStartAddr   = 0U;
+          info->appSize        = 0U;
         }
       }
     }
