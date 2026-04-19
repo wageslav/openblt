@@ -39,7 +39,7 @@
 #include "xcploader.h"                      /* XCP loader module                       */
 #include "xcpprotect.h"                     /* XCP protection module                   */
 #include "firmware.h"                       /* Firmware data module                    */
-
+#include "util.h"                           /* Utility module                          */
 
 /****************************************************************************************
 * Macro definitions
@@ -2084,43 +2084,33 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
   assert(xcpSettings.transport != NULL);
 
   /* Only continue if the parameters are valid and the session is connected. */
-  if ((info != NULL) && (xcpSettings.transport != NULL) && (xcpConnected)) /*lint !e774 */
+  if ((info != NULL) && (xcpSettings.transport != NULL) && (xcpConnected))
   {
     /* Initialize the result value to okay. */
     result = true;
 
     /* ----------------------- GET_INFO XCP USER command ------------------------------ */
-    /* Request the address and length of the bootloader info structure. */
     if (!XcpLoaderSendCmdBiCidGetInfo(&infoAddress, &infoLength))
     {
-      /* Problem occurred during the command exchange with the target. */
       result = false;
     }
-    /* Command exchange with the target successful. Check if info is available. */
     else if (infoLength == 0U)
     {
-      /* No bootloader info available. */
       result = false;
     }
 
     /* ----------------------- Read bootloader info data ------------------------------ */
-    /* Only continue if no error was detected sofar. */
     if (result)
     {
-      /* Allocate memory for reading the bootloader info data. */
       infoData = (uint8_t *)malloc(infoLength);
-      
-      /* Verify allocation results. */
       if (infoData == NULL)
       {
         result = false;
       }
     }
 
-    /* Only continue if no error was detected sofar. */
     if (result)
     {
-      /* Read the bootloader info data from the target. */
       if (!XcpLoaderReadData(infoAddress, infoLength, infoData))
       {
         result = false;
@@ -2128,29 +2118,26 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
     }
 
     /* ----------------------- Parse bootloader info data ----------------------------- */
-    /* Only continue if no error was detected sofar. */
     if (result)
     {
       uint32_t signature;
       uint16_t structVersion;
-      
-      /* Parse the data assuming little-endian byte order (STM32). */
+      uint32_t computedCrc;
+
       signature = (uint32_t)infoData[0] | 
                   ((uint32_t)infoData[1] << 8) |
                   ((uint32_t)infoData[2] << 16) |
                   ((uint32_t)infoData[3] << 24);
-                  
-            /* Check the signature. */
+
       if (signature != 0xB00710ADUL)
       {
-        /* Invalid signature. */
         result = false;
       }
       else
       {
-        /* Parse the rest of the structure. */
         info->signature = signature;
         info->structVersion = (uint16_t)infoData[4] | ((uint16_t)infoData[5] << 8);
+        structVersion = info->structVersion;
         info->hwRevision = (uint16_t)infoData[6] | ((uint16_t)infoData[7] << 8);
         info->verMain = (uint16_t)infoData[8] | ((uint16_t)infoData[9] << 8);
         info->verMinor = (uint16_t)infoData[10] | ((uint16_t)infoData[11] << 8);
@@ -2159,15 +2146,21 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
                           ((uint32_t)infoData[15] << 8) |
                           ((uint32_t)infoData[16] << 16) |
                           ((uint32_t)infoData[17] << 24);
-        
-        /* Copy commit hash. */
+
         for (uint8_t i = 0; i < 8; i++)
         {
           info->commitHash[i] = infoData[18 + i];
         }
 
-        /* If structure version is 2 or higher and we have enough data, parse extended fields. */
-        if (info->structVersion >= 2 && infoLength >= (18 + 8 + 12))
+        /* Default values for extended fields */
+        info->bootloaderSize = 0U;
+        info->appStartAddr   = 0U;
+        info->appSize        = 0U;
+        info->eraseSize      = 0U;
+        info->crc32          = 0U;
+
+        /* Version 2 fields (present if length >= 38) */
+        if (structVersion >= 2 && infoLength >= 38)
         {
           info->bootloaderSize = (uint32_t)infoData[26] | 
                                  ((uint32_t)infoData[27] << 8) |
@@ -2182,24 +2175,40 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
                                  ((uint32_t)infoData[36] << 16) |
                                  ((uint32_t)infoData[37] << 24);
         }
-        else
+
+        /* Version 3 fields (present if length >= 46) */
+        if (structVersion >= 3 && infoLength >= 46)
         {
-          /* Extended fields not present; set to zero. */
-          info->bootloaderSize = 0U;
-          info->appStartAddr   = 0U;
-          info->appSize        = 0U;
+          info->eraseSize = (uint32_t)infoData[38] | 
+                            ((uint32_t)infoData[39] << 8) |
+                            ((uint32_t)infoData[40] << 16) |
+                            ((uint32_t)infoData[41] << 24);
+          info->crc32     = (uint32_t)infoData[42] | 
+                            ((uint32_t)infoData[43] << 8) |
+                            ((uint32_t)infoData[44] << 16) |
+                            ((uint32_t)infoData[45] << 24);
+
+          /* Verify CRC32 over bytes 0..41 (all fields except crc32) */
+          computedCrc = UtilChecksumCrc32Calculate(infoData, 42);
+          if (computedCrc != info->crc32)
+          {
+            result = false;   // CRC mismatch
+          }
+        }
+        else if (structVersion >= 3)
+        {
+          /* Version 3 declared but not enough data */
+          result = false;
         }
       }
     }
   }
 
-  /* Release possibly allocated memory. */
   if (infoData != NULL)
   {
     free(infoData);
   }
 
-  /* Give the result back to the caller. */
   return result;
 } /*** end of XcpLoaderGetBootloaderInfo ***/
 

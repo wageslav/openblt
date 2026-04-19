@@ -244,6 +244,9 @@ typedef struct t_blt_bootloader_info
   uint32_t bootloaderSize;  /**< Size of bootloader area in bytes.                    */
   uint32_t appStartAddr;    /**< Start address of application area.                   */
   uint32_t appSize;         /**< Size of application area in bytes.                   */
+  // New fields for version 3
+  uint32_t eraseSize;       /**< Minimum erase page size in bytes.                    */
+  uint32_t crc32;           /**< CRC32 of all previous fields.                        */
 } tBltBootloaderInfo;
 
 /** \brief Structure containing firmware information as retrieved from the target.
