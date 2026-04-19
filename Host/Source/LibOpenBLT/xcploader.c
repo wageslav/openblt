@@ -2186,12 +2186,6 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
                               ((uint32_t)infoData[45] << 8) |
                               ((uint32_t)infoData[46] << 16) |
                               ((uint32_t)infoData[47] << 24);
-
-            // Verify CRC32 over bytes 0..43 (all fields except crc32)
-            uint32_t computedCrc = UtilChecksumCrc32Calculate(infoData, 44);
-            if (computedCrc != info->crc32) {
-                result = false;   // CRC mismatch
-            }
         }
         else if (structVersion >= 3)
         {
