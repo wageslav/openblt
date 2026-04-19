@@ -2160,40 +2160,38 @@ bool XcpLoaderGetBootloaderInfo(tBltBootloaderInfo * info)
         info->crc32          = 0U;
 
         /* Version 2 fields (present if length >= 38) */
-        if (structVersion >= 2 && infoLength >= 38)
-        {
+       if (structVersion >= 2 && infoLength >= 38) {
           info->bootloaderSize = (uint32_t)infoData[26] | 
-                                 ((uint32_t)infoData[27] << 8) |
-                                 ((uint32_t)infoData[28] << 16) |
-                                 ((uint32_t)infoData[29] << 24);
+                                ((uint32_t)infoData[27] << 8) |
+                                ((uint32_t)infoData[28] << 16) |
+                                ((uint32_t)infoData[29] << 24);
           info->appStartAddr  = (uint32_t)infoData[30] | 
-                                 ((uint32_t)infoData[31] << 8) |
-                                 ((uint32_t)infoData[32] << 16) |
-                                 ((uint32_t)infoData[33] << 24);
+                                ((uint32_t)infoData[31] << 8) |
+                                ((uint32_t)infoData[32] << 16) |
+                                ((uint32_t)infoData[33] << 24);
           info->appSize       = (uint32_t)infoData[34] | 
-                                 ((uint32_t)infoData[35] << 8) |
-                                 ((uint32_t)infoData[36] << 16) |
-                                 ((uint32_t)infoData[37] << 24);
+                                ((uint32_t)infoData[35] << 8) |
+                                ((uint32_t)infoData[36] << 16) |
+                                ((uint32_t)infoData[37] << 24);
         }
 
         /* Version 3 fields (present if length >= 46) */
-        if (structVersion >= 3 && infoLength >= 46)
-        {
-          info->eraseSize = (uint32_t)infoData[38] | 
-                            ((uint32_t)infoData[39] << 8) |
-                            ((uint32_t)infoData[40] << 16) |
-                            ((uint32_t)infoData[41] << 24);
-          info->crc32     = (uint32_t)infoData[42] | 
-                            ((uint32_t)infoData[43] << 8) |
-                            ((uint32_t)infoData[44] << 16) |
-                            ((uint32_t)infoData[45] << 24);
+        if (structVersion >= 3 && infoLength >= 48) {
+            info->eraseSize = (uint32_t)infoData[38] | 
+                              ((uint32_t)infoData[39] << 8) |
+                              ((uint32_t)infoData[40] << 16) |
+                              ((uint32_t)infoData[41] << 24);
+            info->padding   = (uint16_t)infoData[42] | ((uint16_t)infoData[43] << 8);
+            info->crc32     = (uint32_t)infoData[44] | 
+                              ((uint32_t)infoData[45] << 8) |
+                              ((uint32_t)infoData[46] << 16) |
+                              ((uint32_t)infoData[47] << 24);
 
-          /* Verify CRC32 over bytes 0..41 (all fields except crc32) */
-          computedCrc = UtilChecksumCrc32Calculate(infoData, 42);
-          if (computedCrc != info->crc32)
-          {
-            result = false;   // CRC mismatch
-          }
+            // Verify CRC32 over bytes 0..43 (all fields except crc32)
+            uint32_t computedCrc = UtilChecksumCrc32Calculate(infoData, 44);
+            if (computedCrc != info->crc32) {
+                result = false;   // CRC mismatch
+            }
         }
         else if (structVersion >= 3)
         {

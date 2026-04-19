@@ -246,6 +246,7 @@ typedef struct t_blt_bootloader_info
   uint32_t appSize;         /**< Size of application area in bytes.                   */
   // New fields for version 3
   uint32_t eraseSize;       /**< Minimum erase page size in bytes.                    */
+  uint16_t padding;         /**< Padding for 44 bytes.                                */
   uint32_t crc32;           /**< CRC32 of all previous fields.                        */
 } tBltBootloaderInfo;
 
